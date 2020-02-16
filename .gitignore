@@ -1,0 +1,13 @@
+# Visual Studio Code user specific files
+.vscode/
+*.code-workspace
+
+# Visual Studio 2015 user specific files
+.vs/
+
+# Visual Studio 2015 database file
+*.VC.db
+
+# Bin
+bin/
+obj/
