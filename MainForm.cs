@@ -26,6 +26,7 @@ namespace TexChannelPacker
 
         protected BMP bmpAlbedo;
         protected BMP bmpAO;
+        protected BMP bmpCav;
         protected BMP bmpSpec;
         protected BMP bmpNorm;
         protected BMP bmpDispl;
@@ -74,6 +75,11 @@ namespace TexChannelPacker
                     bmpAO = GetData(bmp);
                     bmp.Dispose();
 
+                    filepath = FindSupportedImg(dir, "*_Cavity*");
+                    bmp = new Bitmap(filepath);
+                    bmpCav = GetData(bmp);
+                    bmp.Dispose();
+
                     filepath = FindSupportedImg(dir, "*_Specular*");
                     bmp = new Bitmap(filepath);
                     bmpSpec = GetData(bmp);
@@ -106,6 +112,9 @@ namespace TexChannelPacker
                 filepath = GetFilePath("AO");
                 bmpAO = GetData(new Bitmap(filepath));
 
+                filepath = GetFilePath("Cavity");
+                bmpCav = GetData(new Bitmap(filepath));
+
                 filepath = GetFilePath("Specular");
                 bmpSpec = GetData(new Bitmap(filepath));
 
@@ -122,51 +131,64 @@ namespace TexChannelPacker
                 newfilepath = Path.GetDirectoryName(filepath) + @"\" + name;
             }
 
-
+            var nC = 3;
             var w = bmpAlbedo.Width;
             var h = bmpAlbedo.Height;
-            var argb = new byte[w * h * 4];
-            var s = w * 4;
+            var rgb = new byte[w * h * nC];
+            var s = w * nC;
 
-            // (RGB)Albedo * AO ; (A)Spec
+            // (RGB)Albedo * AO
             for (var x=0 ; x<w ; x++)
                 for (var y=0 ; y<h ; y++)
                 {
-                    var p = x * 4 + y * s;
+                    var p = x * nC + y * s;
 
                     var Albedo = GetPixel(x, y, bmpAlbedo);
                     var AO = GetPixel(x, y, bmpAO);
-                    var Spec = GetPixel(x, y, bmpSpec);
+                    // var Spec = GetPixel(x, y, bmpSpec);
 
                     var fAO = AO[0]/255.0f;
-                    var fSpec = Spec[0]/255.0f;
-                    fSpec *= fSpec * fAO * fAO;
+                    // var fSpec = Spec[0]/255.0f;
+                    // fSpec *= fSpec * fAO * fAO;
 
-                    argb[p + 2] = System.Convert.ToByte(Albedo[0] * fAO);
-                    argb[p + 1] = System.Convert.ToByte(Albedo[1] * fAO);
-                    argb[p + 0] = System.Convert.ToByte(Albedo[2] * fAO);
-                    argb[p + 3] = System.Convert.ToByte(255.0f * fSpec);
+                    rgb[p + 2] = System.Convert.ToByte(Albedo[0] * fAO);
+                    rgb[p + 1] = System.Convert.ToByte(Albedo[1] * fAO);
+                    rgb[p + 0] = System.Convert.ToByte(Albedo[2] * fAO);
                 }                
 
-            WriteData(newfilepath + "_AAOS.png", argb, w, h);
+            WriteData(newfilepath + "_AAO.png", rgb, w, h);
 
-            // (RG)Norm ; (B)Displ ; (A)Rough
+            // (RGB)Norm
             for (var x=0 ; x<w ; x++)
                 for (var y=0 ; y<h ; y++)
                 {
-                    var p = x * 4 + y * s;
+                    var p = x * nC + y * s;
 
                     var Norm = GetPixel(x, y, bmpNorm);
-                    var Displ = GetPixel(x, y, bmpDispl);
-                    var Rough = GetPixel(x, y, bmpRough);
 
-                    argb[p + 2] = Norm[0];
-                    argb[p + 1] = System.Convert.ToByte(0xFF - Norm[1]);
-                    argb[p + 0] = Displ[0];
-                    argb[p + 3] = Rough[0];
+                    rgb[p + 2] = Norm[0];
+                    rgb[p + 1] = System.Convert.ToByte(0xFF - Norm[1]);
+                    rgb[p + 0] = Norm[2];
                 }                
 
-            WriteData(newfilepath + "_NDR.png", argb, w, h);
+            WriteData(newfilepath + "_N.png", rgb, w, h);
+
+            // (R)Displ ; (G)Rough ; (B)Cavity
+            for (var x=0 ; x<w ; x++)
+                for (var y=0 ; y<h ; y++)
+                {
+                    var p = x * nC + y * s;
+
+                    var Displ = GetPixel(x, y, bmpDispl);
+                    var Rough = GetPixel(x, y, bmpRough);
+                    var Cav = GetPixel(x, y, bmpCav);
+
+                    rgb[p + 2] = Displ[0];
+                    rgb[p + 1] = Rough[0];
+                    rgb[p + 0] = Cav[0];
+                }                
+
+            WriteData(newfilepath + "_DRC.png", rgb, w, h);
         }
 
         protected string FindSupportedImg(string dir, string search)
@@ -228,10 +250,10 @@ namespace TexChannelPacker
             return newBmp;
         }
 
-        protected void WriteData(string filepath, byte[] argbValues, int width, int height)
+        protected void WriteData(string filepath, byte[] rgbValues, int width, int height)
         {
             // Create a new bitmap.
-            Bitmap bmp = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            Bitmap bmp = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
             // Lock the bitmap's bits.  
             Rectangle rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
@@ -246,7 +268,7 @@ namespace TexChannelPacker
             int bytes  = Math.Abs(bmpData.Stride) * bmp.Height;
 
             // Copy the RGB values back to the bitmap
-            System.Runtime.InteropServices.Marshal.Copy(argbValues, 0, ptr, bytes);
+            System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
 
             // Unlock the bits.
             bmp.UnlockBits(bmpData);
